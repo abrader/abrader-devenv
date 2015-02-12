@@ -1,0 +1,1 @@
+gem 'puppetclassify', '~> 0.1.0'
