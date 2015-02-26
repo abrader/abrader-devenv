@@ -1,4 +1,4 @@
-define pmdev::provision(
+define devenv::pagent(
   $control_repository_url,
   $role_class,
   $agent_name,
