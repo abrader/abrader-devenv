@@ -1,5 +1,4 @@
 require 'puppet'
-require 'puppetclassify'
 
 Puppet::Type.type(:node_classify).provide(:rest) do
 
@@ -11,11 +10,20 @@ Puppet::Type.type(:node_classify).provide(:rest) do
     "certificate_path"    => "/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.cert.pem",
     "private_key_path"    => "/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.private_key.pem"
   }
+  
+  def initialize
+    require 'puppetclassify'
+    #include PuppetClassify
+    
+    classifier_url = resource[:classifier_url].strip
+    @puppetclassify ||= PuppetClassify.new(classifier_url, AUTH_INFO)
+  end
   #CLASSIFIER_URL = Puppet::Type::Node_classify.resource[:classifier_url].strip
   
   def exists?
-    classifier_url = resource[:classifier_url].strip
-    puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
+    
+    #classifier_url = resource[:classifier_url].strip
+    #puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
 
     parent_id = puppetclassify.groups.get_group_id('default')
     
@@ -45,8 +53,8 @@ Puppet::Type.type(:node_classify).provide(:rest) do
   end
   
   def create
-    classifier_url = resource[:classifier_url].strip
-    puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
+    #classifier_url = resource[:classifier_url].strip
+    #puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
     
     parent_id = puppetclassify.groups.get_group_id('default')
     
@@ -66,8 +74,8 @@ Puppet::Type.type(:node_classify).provide(:rest) do
   end
   
   def destroy
-    classifier_url = resource[:classifier_url].strip
-    puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
+    #classifier_url = resource[:classifier_url].strip
+    #puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
     
     begin
       group_id = puppetclassify.groups.get_group_id(resource[:name].strip)

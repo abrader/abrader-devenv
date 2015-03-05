@@ -1,4 +1,4 @@
-define devenv::pagent(
+define devenv::pmaster(
   $control_repository_url,
   $role_class,
   $agent_name,
@@ -26,14 +26,21 @@ define devenv::pagent(
 
   exec { 'r10k_run':
     command => '/opt/puppet/bin/r10k deploy environment -p',
-    creates => "${::settings::confdir}/environments/production",
+    creates => "${::settings::confdir}/environments/${environment}",
     require => Class['r10k'],
   }
-
-  package { 'puppetclassify':
-    ensure        => '0.1.0',
-    provider      => 'pe_gem',
+  
+  file { 'control_repo_inclusion' :
+    ensure  => file,
+    path    => "${::settings::confdir}/environments/${environment}/environment.conf",
+    content => "modulepath = control:site:dist:modules:\$basemodulepath\n",
+    require => Exec['r10k_run'],
   }
+
+  # package { 'puppetclassify':
+  #   ensure        => '0.1.0',
+  #   provider      => 'pe_gem',
+  # }
   
   node_classify { 'Puppet Code Development':
     ensure         => present,
