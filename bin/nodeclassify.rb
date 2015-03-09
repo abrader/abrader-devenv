@@ -49,6 +49,10 @@ class NodeClassify
       opts.on('-e', '--environment ENVIRONMENT', 'Environment to be bound to group name') do |e|
         @options[:env] = e
       end
+      
+      opts.on('-g', '--group GROUPNAME', 'Group name. Must be provided with host, class, or parameter calls') do |g|
+        @options[:ng] = g
+      end
   
       opts.on('--ac', '--addclasses CLASSES', Array, 'Classes to be classified to Puppet node') do |c|
         @options[:classes] = c
@@ -106,8 +110,10 @@ class NodeClassify
     
     if @options[:dg]
       groupname = @options[:dn]
-    else
+    elsif @options[:ag]
       groupname = @options[:an]
+    else
+      groupname = @options[:ng]
     end
       
     self.get_groups.each do |g|
@@ -127,10 +133,10 @@ class NodeClassify
     return nil
   end
 
-  def remove_node_from_group(options)
-    if options[:gn] && options[:fqdn]
+  def remove_node_from_group
+    if @options[:ng] && @options[:fqdn]
     
-      group_id = get_group_id(options[:gn])
+      group_id = get_group_id
     
       if group_id.nil?
         return false
@@ -144,16 +150,16 @@ class NodeClassify
     
       # Check to see if rules already exist.
       if egr['rule'].nil?
-        group['rule'] = ["=", "name", options[:fqdn].strip]
+        group['rule'] = ["=", "name", @options[:fqdn].strip]
       else
         # Check to see rule contain node already.
         egr['rule'].each do |el|
-          eqrule = ["=", "name", options[:fqdn].strip]
+          eqrule = ["=", "name", @options[:fqdn].strip]
           if el.eql?(eqrule)
             rule_array = egr['rule']
       
             if rule_array[0].eql?('or')
-              rule_array -= [["=", "name", options[:fqdn].strip]] 
+              rule_array -= [["=", "name", @options[:fqdn].strip]] 
               group['rule'] = rule_array
             end
           end
@@ -172,10 +178,10 @@ class NodeClassify
     end
   end
 
-  def add_node_to_group(options)
-    if options[:gn] && options[:fqdn]
+  def add_node_to_group
+    if @options[:ng] && @options[:fqdn]
     
-      group_id = get_group_id(options[:gn])
+      group_id = get_group_id
     
       if group_id.nil?
         return false
@@ -189,11 +195,11 @@ class NodeClassify
     
       # Check to see if rules already exist.
       if egr['rule'].nil?
-        group['rule'] = ["=", "name", options[:fqdn].strip]
+        group['rule'] = ["or", ["=", "name", @options[:fqdn].strip]]
       else
         # Check to see rule contain node already.
         egr['rule'].each do |el|
-          eqrule = ["=", "name", options[:fqdn].strip]
+          eqrule = ["=", "name", @options[:fqdn].strip]
           if el.eql?(eqrule)
             return true
           end
@@ -202,10 +208,12 @@ class NodeClassify
         rule_array = egr['rule']
       
         if rule_array[0].eql?('or')
-          rule_array += [["=", "name", options[:fqdn].strip]] 
+          rule_array += [["=", "name", @options[:fqdn].strip]] 
           group['rule'] = rule_array
         end
       end
+      
+      puts "rule = #{group['rule']}"
     
       begin
         @puppetclassify.groups.update_group(group)
@@ -218,9 +226,9 @@ class NodeClassify
     end
   end
 
-  def add_classes_to_group(options)
-    if options[:gn] && options[:classes]
-      group_id = get_group_id(options[:gn])
+  def add_classes_to_group
+    if @options[:ng] && @options[:classes]
+      group_id = get_group_id
     
       if group_id.nil?
         return false
@@ -233,7 +241,7 @@ class NodeClassify
       group['id'] = group_id unless group_id.nil?
       group['classes'] = egr['classes']
      
-      options[:classes].each do |cl|
+      @options[:classes].each do |cl|
         cl_hash = Hash.new
         cl_hash[cl] = {}
         group['classes'].merge!(cl_hash)
@@ -250,9 +258,10 @@ class NodeClassify
     end
   end
 
-  def remove_classes_from_group(options)
-    if options[:gn] && options[:classes]
-      group_id = get_group_id(options[:gn])
+  def remove_classes_from_group
+    if @options[:ng] && @options[:classes]
+      
+      group_id = get_group_id
     
       if group_id.nil?
         return false
@@ -265,11 +274,11 @@ class NodeClassify
       group['id'] = group_id unless group_id.nil?
       group['classes'] = egr['classes']
     
-      puts group['classes'].inspect
+      #puts group['classes'].inspect
     
       if group['classes'].size != 0
         group['classes'].each do |k,v|
-          options[:classes].each do |cl|
+          @options[:classes].each do |cl|
             if k.eql?(cl)
               group['classes'][k] = nil
             end
@@ -277,7 +286,7 @@ class NodeClassify
         end
       end
 
-      puts group.inspect
+      #puts group.inspect
 
       begin
         @puppetclassify.groups.update_group(group)
@@ -346,7 +355,7 @@ if @puppetclassify.nil?
   nc.get_options
 end
 
-puts nc.options.inspect
+#puts nc.options.inspect
 
 #puts "We're adding!" if nc.options[:add]
 #puts "We're deleting!" if nc.options[:del]
@@ -359,23 +368,53 @@ if nc.options[:ag]
   end
 end
 
+if nc.options[:ah]
+  if nc.options[:ng]
+    nc.add_node_to_group
+  else
+    raise OptionParaser::MissingArgument
+  end
+end
+
+if nc.options[:dh]
+  if nc.options[:ng]
+    nc.remove_node_from_group
+  else
+    raise OptionParser::MissingArgument
+  end
+end
+
+if nc.options[:ac]
+  if nc.options[:ng] && nc.options[:classes]
+    nc.add_classes_to_group
+  else
+    raise OptionParser.MissingArgument
+  end
+end
+
+if nc.options[:dc]
+  if nc.options[:ng] && nc.options[:classes]
+    nc.remove_classes_from_group
+  else
+    raise OptionParser.MissingArgument
+  end
+end
+
+if nc.options[:ap]
+  puts "This version of nodeclassify currently does not support functions that add/remove parameters."
+  exit
+end
+
+if nc.options[:dp]
+  puts "This version of nodeclassify currently does not support functions that add/remove parameters."
+  exit
+end
+
 if nc.options[:dg]
   if nc.options[:dn]
     nc.delete_node_group
   else
     raise OptionParser::MissingArgument, nc.options[:dn]
   end
-end
-
-# if options[:del]
-#   puts "Gonna delete a group now!"
-# else
-#   #create_node_group(options)
-#   #add_node_to_group(options)
-#   #remove_node_from_group(options)
-#   remove_classes_from_group(options)
-# end
-
-
-  
+end  
   
