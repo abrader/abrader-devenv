@@ -4,7 +4,7 @@ require 'puppetclassify'
 Puppet::Type.type(:node_classify).provide(:restapi) do
 
   defaultfor :restapi => :exist
-  #defaultfor :feature => :posix
+  defaultfor :feature => :posix
   
   AUTH_INFO = {
     "ca_certificate_path" => "/opt/puppet/share/puppet-dashboard/certs/ca_cert.pem",
@@ -12,12 +12,16 @@ Puppet::Type.type(:node_classify).provide(:restapi) do
     "private_key_path"    => "/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.private_key.pem"
   }
   
-  def initialize
+  def start
     classifier_url = resource[:classifier_url].strip
     @puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
   end
   
   def exists?
+    if @puppetclassify.nil?
+      start
+    end
+    
     parent_id = @puppetclassify.groups.get_group_id('default')
     
     group = Hash.new
@@ -65,6 +69,8 @@ Puppet::Type.type(:node_classify).provide(:restapi) do
   
   def destroy
     begin
+      #classifier_url = resource[:classifier_url].strip
+      #puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
       group_id = @puppetclassify.groups.get_group_id(resource[:name].strip)
       
       if group_id.nil?
