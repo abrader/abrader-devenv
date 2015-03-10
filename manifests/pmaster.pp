@@ -1,15 +1,15 @@
-define devenv::pmaster(
+define devenv::pmaster (
   $control_repository_url,
   $role_class,
   $agent_name,
-  $environment,
+  $env,
 ) {
 
   Package {
     allow_virtual => true,
   }
 
-  class { 'r10k':
+  class { 'r10k' :
     include_prerun_command => true,
     sources  => {
       "${agent_name}-${role_class}-${environment}" => {
@@ -20,11 +20,11 @@ define devenv::pmaster(
     }
   }
 
-  class { 'r10k::postrun_command':
+  class { 'r10k::postrun_command' :
     ensure => absent,
   }
 
-  exec { 'r10k_run':
+  exec { 'r10k_run' :
     command => '/opt/puppet/bin/r10k deploy environment -p',
     creates => "${::settings::confdir}/environments/${environment}",
     require => Class['r10k'],
@@ -37,16 +37,17 @@ define devenv::pmaster(
     require => Exec['r10k_run'],
   }
 
-  # package { 'puppetclassify':
-  #   ensure        => '0.1.0',
-  #   provider      => 'pe_gem',
-  # }
+  package { 'puppetclassify' :
+    ensure        => '0.1.0',
+    provider      => 'pe_gem',
+  }
   
-  node_classify { 'Puppet Code Development':
+  node_classify { 'pcd' :
     ensure         => present,
-    role           => $role_class,
+    name           => 'Puppet Code Development',
+    role_class     => $role_class,
     hostname       => $agent_name,
-    environment    => $environment,
+    env            => $env,
     classifier_url => 'https://master.puppetlabs.vm:4433/classifier-api',
     require        => Package['puppetclassify'],
   }
