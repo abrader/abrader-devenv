@@ -12,12 +12,14 @@ class NodeClassify
     "private_key_path"    => "/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.private_key.pem"
   }
 
+  # Intialize is already used
   def start(classifier_url='https://master.puppetlabs.vm:4433/classifier-api')
     @options = {}
     classifier_url ||= 'https://localhost:4433/classifier-api'
     @puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
   end
   
+  # Gets all options from the command line
   def get_options
     OptionParser.new do |opts|
       # Default banner is "Usage: #{opts.program_name} [options]".
@@ -45,6 +47,10 @@ class NodeClassify
         @options[:fqdn] = f
         @options[:dh] = true
       end
+      
+      opts.on('-c', '--class ENVIRONMENT', 'Class name. To be used with parameters \(--ap or --dp\)') do |c|
+        @options[:class] = c
+      end
   
       opts.on('-e', '--environment ENVIRONMENT', 'Environment to be bound to group name') do |e|
         @options[:env] = e
@@ -71,7 +77,7 @@ class NodeClassify
       
       opts.on('--dp', '--delparams PARAMETERS', Array, 'Remove overiding class parameters ') do |p|
         @options[:params] = p
-        @options[:ap] = true
+        @options[:dp] = true
       end
   
       opts.on('-r', '--parent PARENTGROUPNAME', 'Parent group name to be associated with group') do |r|
@@ -93,18 +99,17 @@ class NodeClassify
     end
   end
 
+  # Used in conjunction with get_group_id and get_group_id_by_name
   def get_groups
     begin
       groups = @puppetclassify.groups.get_groups
-      #puts groups.inspect
-      #puts abrule = groups[1]['rule'].inspect
-      #puts @puppetclasify.rules.translate(abrule)
     rescue Exception => e
       puts e.message
     end
     return groups unless groups.nil?
   end
-
+  
+  # Need to get group id to translate group name to something usable by the API
   def get_group_id
     groupname = String.new
     
@@ -124,6 +129,7 @@ class NodeClassify
     return nil
   end
   
+  # Need this for the simple case of getting the parent group id
   def get_group_id_by_name(groupname)
     self.get_groups.each do |g|
       if groupname.strip.eql?(g['name'])
@@ -133,6 +139,7 @@ class NodeClassify
     return nil
   end
 
+  # Removes classified node from group
   def remove_node_from_group
     if @options[:ng] && @options[:fqdn]
     
@@ -178,6 +185,7 @@ class NodeClassify
     end
   end
 
+  # Adds node to group for classification
   def add_node_to_group
     if @options[:ng] && @options[:fqdn]
     
@@ -213,7 +221,7 @@ class NodeClassify
         end
       end
       
-      puts "rule = #{group['rule']}"
+      #puts "rule = #{group['rule']}"
     
       begin
         @puppetclassify.groups.update_group(group)
@@ -225,7 +233,102 @@ class NodeClassify
       return true    
     end
   end
+  
+  # Adds parameters to a given class
+  def add_params_to_class
+    if @options[:ng] && @options[:class] && @options[:params]
+      group_id = get_group_id
+      
+      if group_id.nil?
+        return false
+      end
+      
+      egr = @puppetclassify.groups.get_group(group_id)
+      
+      group = egr
+      
+      clparams = Hash.new
+      
+      # Check if class exists in list of classes for this node group already.
+      if group['classes'].include?(@options[:class].strip)
+        @options[:params].each do |p|
+          k = p.split('=')[0]
+          v = p.split('=')[1]
+          
+          clparams[k] = v
+        end
+        
+        group['classes'][@options[:class].strip] = clparams
+      else
+        # Figure out what to do in the case classes are not provided.
+      end
+      
+      begin
+        @puppetclassify.groups.update_group(group) unless @puppetclassify.validate.validate_group(group)
+      rescue Exception => e
+        puts e.message
+        puts e.backtrace
+      end
+      
+      return true
+    end
+  end
+  
+  # Removes specific parameters from being associated with a class
+  def remove_params_from_class
+    if @options[:ng] && @options[:class] && @options[:params]
+      group_id = get_group_id
+      
+      if group_id.nil?
+        return false
+      end
+      
+      egr = @puppetclassify.groups.get_group(group_id)
+      
+      group = egr
+      
+      clparams = Hash.new
+      
+      # Check if class exists in list of classes for this node group already.
+      if group['classes'].include?(@options[:class].strip)
+        
+        clparams = Hash.new
+        
+        @options[:params].each do |p|
+          k = p.split('=')[0]
+          v = p.split('=')[1]
 
+          clparams[k] = nil
+        end
+        
+        group['classes'].each do |cl|
+          cl.each do |k,v|
+            if k.class == Hash
+              k.each do |q,p|
+                if clparams.key?(q)
+                  k[q] = nil
+                end
+              end
+            end
+          end
+        end
+        
+      else
+        # Figure out what to do in the case classes are not provided.
+      end
+      
+      begin
+        @puppetclassify.groups.update_group(group) #if @puppetclassify.validate.validate_group(group)
+      rescue Exception => e
+        puts e.message
+        puts e.backtrace
+      end
+      
+      return true
+    end
+  end
+
+  # Adds class to group for classification
   def add_classes_to_group
     if @options[:ng] && @options[:classes]
       group_id = get_group_id
@@ -258,6 +361,7 @@ class NodeClassify
     end
   end
 
+  # Removes class from classification within a group
   def remove_classes_from_group
     if @options[:ng] && @options[:classes]
       
@@ -286,8 +390,6 @@ class NodeClassify
         end
       end
 
-      #puts group.inspect
-
       begin
         @puppetclassify.groups.update_group(group)
       rescue Exception => e
@@ -299,6 +401,7 @@ class NodeClassify
     end
   end
   
+  # Create a node group for classifying node(s)
   def create_node_group
     if @options[:an] && @options[:fqdn] && @options[:env] && @options[:classes]
       if @options[:pgn].nil?
@@ -325,11 +428,7 @@ class NodeClassify
         group['classes'].merge!(cl => {})
       end
      
-      #puts @options[:classes]
-      #puts group['classes']
-    
       begin
-        #puts @puppetclassify.validate.validate_group(group)
         @puppetclassify.groups.create_group(group)
       rescue Exception => e
         puts e.message
@@ -347,19 +446,18 @@ class NodeClassify
 
 end
 
+
+# Essentially the main() class in Ruby  
   
 nc = NodeClassify.new
 
 if @puppetclassify.nil?
   nc.start
   nc.get_options
+  #puts nc.options.inspect
 end
 
-#puts nc.options.inspect
-
-#puts "We're adding!" if nc.options[:add]
-#puts "We're deleting!" if nc.options[:del]
-
+# Create Node Group
 if nc.options[:ag]
   if nc.options[:an] && nc.options[:fqdn] && nc.options[:env] && nc.options[:classes]
     nc.create_node_group
@@ -368,6 +466,16 @@ if nc.options[:ag]
   end
 end
 
+# Delete Node Group
+if nc.options[:dg]
+  if nc.options[:dn]
+    nc.delete_node_group
+  else
+    raise OptionParser::MissingArgument, nc.options[:dn]
+  end
+end 
+
+# Add Node to Group
 if nc.options[:ah]
   if nc.options[:ng]
     nc.add_node_to_group
@@ -376,6 +484,7 @@ if nc.options[:ah]
   end
 end
 
+# Remove Node from Group
 if nc.options[:dh]
   if nc.options[:ng]
     nc.remove_node_from_group
@@ -384,6 +493,7 @@ if nc.options[:dh]
   end
 end
 
+# Add class(es) to Group
 if nc.options[:ac]
   if nc.options[:ng] && nc.options[:classes]
     nc.add_classes_to_group
@@ -392,6 +502,7 @@ if nc.options[:ac]
   end
 end
 
+# Remove Class(es) from Group
 if nc.options[:dc]
   if nc.options[:ng] && nc.options[:classes]
     nc.remove_classes_from_group
@@ -400,21 +511,21 @@ if nc.options[:dc]
   end
 end
 
+# Add Parameter(s) to Class
 if nc.options[:ap]
-  puts "This version of nodeclassify currently does not support functions that add/remove parameters."
-  exit
-end
-
-if nc.options[:dp]
-  puts "This version of nodeclassify currently does not support functions that add/remove parameters."
-  exit
-end
-
-if nc.options[:dg]
-  if nc.options[:dn]
-    nc.delete_node_group
+  if nc.options[:ng] && nc.options[:class] && nc.options[:params]
+    nc.add_params_to_class
   else
-    raise OptionParser::MissingArgument, nc.options[:dn]
+    raise OptionParser.MissingArgument
   end
-end  
+end
+
+# Remove Parameters from within a Class
+if nc.options[:dp]
+  if nc.options[:ng] && nc.options[:class] && nc.options[:params]
+    nc.remove_params_from_class
+  else
+    raise OptionParser.MissingArgument
+  end
+end 
   
