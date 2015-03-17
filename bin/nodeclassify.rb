@@ -38,12 +38,12 @@ class NodeClassify
         @options[:dg] = true
       end
   
-      opts.on('--ah', '--addhost FQDN', 'Add Hostname, FQDN, or Puppet ::certname') do |f|
+      opts.on('--ah', '--addhost FQDN', Array, 'Add Hostname, FQDN, or Puppet ::certname') do |f|
         @options[:fqdn] = f
         @options[:ah] = true
       end
       
-      opts.on('--dh', '--delhost FQDN', 'Delete Hostname, FQDN, or Puppet ::certname') do |f|
+      opts.on('--dh', '--delhost FQDN', Array, 'Delete Hostname, FQDN, or Puppet ::certname') do |f|
         @options[:fqdn] = f
         @options[:dh] = true
       end
@@ -154,25 +154,19 @@ class NodeClassify
     
       group = Hash.new
       group['id'] = group_id
-    
-      # Check to see if rules already exist.
-      if egr['rule'].nil?
-        group['rule'] = ["=", "name", @options[:fqdn].strip]
-      else
-        # Check to see rule contain node already.
-        egr['rule'].each do |el|
-          eqrule = ["=", "name", @options[:fqdn].strip]
-          if el.eql?(eqrule)
-            rule_array = egr['rule']
       
-            if rule_array[0].eql?('or')
-              rule_array -= [["=", "name", @options[:fqdn].strip]] 
-              group['rule'] = rule_array
-            end
+      if egr['rule'].nil?
+        return false
+      else
+        @options[:fqdn].each do |h|
+          idx = egr['rule'].index(['=', 'name', h])
+          if idx
+            egr['rule'].delete_at(idx)
           end
         end
-      
       end
+      
+      group['rule'] = egr['rule']
     
       begin
         @puppetclassify.groups.update_group(group)
@@ -197,28 +191,27 @@ class NodeClassify
     
       # Get existing group info first
       egr = @puppetclassify.groups.get_group(group_id)
-    
+      
       group = Hash.new
       group['id'] = group_id
     
-      # Check to see if rules already exist.
-      if egr['rule'].nil?
-        group['rule'] = ["or", ["=", "name", @options[:fqdn].strip]]
+      group['rule'] = Array.new
+      host_rules = Array.new
+      
+      # Create a correctly formatted array of hosts to be added
+      @options[:fqdn].each do |h|
+        host_rules << ['=', 'name', h.strip]
+      end
+    
+      # Check to see if rules already exist.  If they do, add them to the list to provide correct delta for update
+      if egr['rule']
+        group['rule'] = egr['rule']
       else
-        # Check to see rule contain node already.
-        egr['rule'].each do |el|
-          eqrule = ["=", "name", @options[:fqdn].strip]
-          if el.eql?(eqrule)
-            return true
-          end
-        end
+        group['rule'][0] = 'or'
+      end
       
-        rule_array = egr['rule']
-      
-        if rule_array[0].eql?('or')
-          rule_array += [["=", "name", @options[:fqdn].strip]] 
-          group['rule'] = rule_array
-        end
+      host_rules.each do |h|
+        group['rule'] << h
       end
       
       #puts "rule = #{group['rule']}"
@@ -403,7 +396,7 @@ class NodeClassify
   
   # Create a node group for classifying node(s)
   def create_node_group
-    if @options[:an] && @options[:fqdn] && @options[:env] && @options[:classes]
+    if @options[:an] && @options[:env]
       if @options[:pgn].nil?
         @options[:pgn] = get_group_id_by_name('default')
       end
@@ -416,17 +409,7 @@ class NodeClassify
       group['name'] = @options[:an]
       group['parent'] = @options[:pgn]
       group['environment'] = @options[:env].strip
-      
-      if group_id
-        egr = @puppetclassify.groups.get_group(group_id)
-        group['classes'] = egr['classes']
-      else
-        group['classes'] = Hash.new
-      end
-      
-      @options[:classes].each do |cl|
-        group['classes'].merge!(cl => {})
-      end
+      group['classes'] = Hash.new
      
       begin
         @puppetclassify.groups.create_group(group)
@@ -454,12 +437,12 @@ nc = NodeClassify.new
 if @puppetclassify.nil?
   nc.start
   nc.get_options
-  #puts nc.options.inspect
+  # puts nc.options.inspect
 end
 
 # Create Node Group
 if nc.options[:ag]
-  if nc.options[:an] && nc.options[:fqdn] && nc.options[:env] && nc.options[:classes]
+  if nc.options[:an] && nc.options[:env]
     nc.create_node_group
   else
     raise OptionParser::MissingArgument
@@ -480,7 +463,7 @@ if nc.options[:ah]
   if nc.options[:ng]
     nc.add_node_to_group
   else
-    raise OptionParaser::MissingArgument
+    raise OptionParser::MissingArgument
   end
 end
 
