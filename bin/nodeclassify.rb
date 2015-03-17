@@ -397,7 +397,9 @@ class NodeClassify
   # Create a node group for classifying node(s)
   def create_node_group
     if @options[:an] && @options[:env]
-      if @options[:pgn].nil?
+      if @options[:pgn]
+        @options[:pgn] = get_group_id_by_name(@options[:pgn])
+      else
         @options[:pgn] = get_group_id_by_name('default')
       end
     
