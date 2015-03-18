@@ -398,7 +398,7 @@ class NodeClassify
   def create_node_group
     if @options[:an] && @options[:env]
       if @options[:pgn]
-        @options[:pgn] = get_group_id_by_name(@options[:pgn])
+        @options[:pgn] = get_group_id_by_name(@options[:pgn].strip)
       else
         @options[:pgn] = get_group_id_by_name('default')
       end
