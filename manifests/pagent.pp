@@ -1,30 +1,42 @@
-define devenv::pagent(
+define devenv::pagent (
   $control_repository_url,
-  $role_class,
-  $agent_name,
-  $environment,
-  $etcpath = $devenv::params::etcpath,
-  $workdir = $devenv::params::devenv,
-) inherits devenv::params {
-
+  $env,
+) {
+  
+  include ::devenv::params
+  
+  $etcpath = $::devenv::params::etcpath
+  $workdir = $::devenv::params::workdir
+  
   Package {
     allow_virtual => true,
   }
   
-  ini_setting { 'puppet.conf.agent':
-    ensure  => present,
-    path    => "${etcpath}/puppet.conf",
-    section => 'main',
-    setting => 'basemodulepath',
-    value   => "${workdir}:/etc/puppetlabs/puppet/environments/production/modules:/opt/puppet/share/puppet/modules",
+  file_line { 'hiera_line':
+    line => "    ${::settings::confdir}/environments/${env}/hieradata",
+    path   => "${::settings::confdir}/hiera.yaml",
   }
-
+  
+  file { 'envs_dir':
+    ensure => present,
+    path   => "${::settings::confdir}/environments",
+    #force  => true,
+  }
+  
+  file { 'env_dir':
+    ensure => absent,
+    path   => "${::settings::confdir}/environments/${env}",
+    force  => true,
+  }
+  
   class { 'r10k':
     include_prerun_command => true,
+    require => Package['git'],
+    provider => 'pe_gem',
     sources  => {
-      "${agent_name}-${role_class}-${environment}" => {
+      "${agent_name}-${role_class}-${env}" => {
         'remote'  => $control_repository_url,
-        'basedir' => "${workdir}",
+        'basedir' => "${::settings::confdir}/environments",
         'prefix'  => false,
       },
     }
@@ -35,23 +47,9 @@ define devenv::pagent(
   }
 
   exec { 'r10k_run':
-    command => "/opt/puppet/bin/r10k deploy environment ${environment} -p",
-    creates => "${workdir}",
-    require => Class['r10k'],
+    command => "/opt/puppet/bin/r10k deploy environment ${env} -p",
+    creates => "${::settings::confdir}/environments/${env}/modules",
+    require => [ Class['r10k'], File['env_dir'] ],
   }
-
-  # package { 'puppetclassify':
-  #   ensure        => '0.1.0',
-  #   provider      => 'pe_gem',
-  # }
-  #
-  # node_classify { 'Puppet Code Development':
-  #   ensure         => present,
-  #   role           => $role_class,
-  #   hostname       => $agent_name,
-  #   environment    => $environment,
-  #   classifier_url => 'https://master.puppetlabs.vm:4433/classifier-api',
-  #   require        => Package['puppetclassify'],
-  # }
   
 }

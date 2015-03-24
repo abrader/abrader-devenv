@@ -39,6 +39,8 @@ Puppet::Type.type(:node_classify).provide(:restapi) do
     
     existing_group = @puppetclassify.groups.get_group(group_id)
     
+    #puts existing_group.inspect
+    
     group.each do |k,v|
       if group[k] != existing_group[k]
         self.destroy
@@ -50,6 +52,9 @@ Puppet::Type.type(:node_classify).provide(:restapi) do
   end
   
   def create
+    # Kick an update so the class will populate prior to our node group creation.  Otherwise BOOM!
+    @puppetclassify.update_classes.update
+    
     parent_id = @puppetclassify.groups.get_group_id('default')
     
     group = Hash.new
@@ -57,7 +62,8 @@ Puppet::Type.type(:node_classify).provide(:restapi) do
     group['parent'] = parent_id
     group['environment'] = resource[:env].strip
     group['classes'] = {resource[:role_class].strip => {}}
-    group['rule'] = ["=", ["fact", "fqdn"], resource[:hostname].strip]
+    group['rule'] = ['or', ['=', 'name', resource[:hostname].strip]]
+    #group['rule'] = ["or", ["=", "name", "agent.puppetlabs.vm"]]
     
     begin
       @puppetclassify.groups.create_group(group)
