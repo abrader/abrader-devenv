@@ -1,5 +1,6 @@
 define devenv::pmaster (
   $control_repository_url,
+  $master_name,
   $role_class,
   $agent_name,
   $env,
@@ -88,7 +89,7 @@ define devenv::pmaster (
     role_class     => $role_class,
     hostname       => $agent_name,
     env            => $env,
-    classifier_url => 'https://master.puppetlabs.vm:4433/classifier-api',
+    classifier_url => "https://${master_name}:4433/classifier-api",
     require        => [ Package['puppetclassify'], File['control_repo_inclusion'] ],
   }
   

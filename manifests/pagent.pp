@@ -1,5 +1,6 @@
 define devenv::pagent (
   $control_repository_url,
+  $master_name,
   $env,
 ) {
   
@@ -12,13 +13,21 @@ define devenv::pagent (
     allow_virtual => true,
   }
   
+  ini_setting {'server_setting':
+    ensure  => present,
+    path    => '/etc/puppetlabs/puppet/puppet.conf',
+    section => 'main',
+    setting => 'server',
+    value   => $master_name,
+  }
+  
   file_line { 'hiera_line':
     line => "    ${::settings::confdir}/environments/${env}/hieradata",
     path   => "${::settings::confdir}/hiera.yaml",
   }
   
   file { 'envs_dir':
-    ensure => present,
+    ensure => directory,
     path   => "${::settings::confdir}/environments",
     #force  => true,
   }
@@ -32,7 +41,6 @@ define devenv::pagent (
   class { 'r10k':
     include_prerun_command => true,
     require => Package['git'],
-    provider => 'pe_gem',
     sources  => {
       "${agent_name}-${role_class}-${env}" => {
         'remote'  => $control_repository_url,
