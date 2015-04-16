@@ -28,6 +28,9 @@ class NodeClassify
       opts.separator "This script calls the Puppet Node Classifier API to handle classifcation tasks."
       opts.version = "0.1.1"
       
+      # Can not assume user wants override on.  Explicitly calling false unless otherwise indicated
+      @options[:override] = false
+      
       opts.on('--ag', '--addgroup GROUPNAME', 'Add/manage node group') do |g|
         @options[:an]  = g
         @options[:ag] = true
@@ -78,6 +81,10 @@ class NodeClassify
       opts.on('--dp', '--delparams PARAMETERS', Array, 'Remove overiding class parameters ') do |p|
         @options[:params] = p
         @options[:dp] = true
+      end
+      
+      opts.on('-o', '--override', 'Environment override for node group') do |o|
+        @options[:override] = true
       end
   
       opts.on('-r', '--parent PARENTGROUPNAME', 'Parent group name to be associated with group') do |r|
@@ -411,6 +418,7 @@ class NodeClassify
       group['name'] = @options[:an]
       group['parent'] = @options[:pgn]
       group['environment'] = @options[:env].strip
+      group['environment_trumps'] = @options[:override]
       group['classes'] = Hash.new
      
       begin
