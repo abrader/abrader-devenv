@@ -1,4 +1,4 @@
-#!/opt/puppet/bin/ruby
+#!/usr/bin/env ruby
 
 require 'optparse'
 require 'puppetclassify'
@@ -6,21 +6,16 @@ require 'puppetclassify'
 class NodeClassify
   attr_accessor :options
 
-  AUTH_INFO = {
-    "ca_certificate_path" => "/opt/puppet/share/puppet-dashboard/certs/ca_cert.pem",
-    "certificate_path"    => "/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.cert.pem",
-    "private_key_path"    => "/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.private_key.pem"
-  }
-
   # Intialize is already used
-  def start(classifier_url='https://master.puppetlabs.vm:4433/classifier-api')
-    @options = {}
-    classifier_url ||= 'https://localhost:4433/classifier-api'
-    @puppetclassify = PuppetClassify.new(classifier_url, AUTH_INFO)
+  def start(classifier_url, auth_info)
+    @puppetclassify = PuppetClassify.new(classifier_url, auth_info)
   end
   
   # Gets all options from the command line
   def get_options
+    # Empty options Hash
+    @options = {}
+
     OptionParser.new do |opts|
       # Default banner is "Usage: #{opts.program_name} [options]".
   
@@ -28,6 +23,38 @@ class NodeClassify
       opts.separator "This script calls the Puppet Node Classifier API to handle classifcation tasks."
       opts.version = "0.1.1"
       
+      # Set default classifier values
+      @options[:console_protocol] = 'https'
+      @options[:console_host]     = 'puppet'
+      @options[:console_port]     = '4433'
+      @options[:certificate]      = '/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.cert.pem'
+      @options[:private_key]      = '/opt/puppet/share/puppet-dashboard/certs/pe-internal-dashboard.private_key.pem'
+      @options[:ca_certificate]   = '/opt/puppet/share/puppet-dashboard/certs/ca_cert.pem'
+
+      opts.on('-s', '--console-protocol PROTOCOL', 'Specify console protocol') do |s|
+        @options[:console_protocol] = s
+      end
+
+      opts.on('-h', '--console-host CONSOLESERVER', 'Specify console hostname') do |h|
+        @options[:console_host] = h
+      end
+
+      opts.on('-p', '--console-port PORT', 'Specify console port') do |p|
+        @options[:console_port] = p
+      end
+
+      opts.on('-i', '--certificate CERTIFICATE', 'Specify path to certificate') do |c|
+        @options[:certificate] = c
+      end
+
+      opts.on('-k', '--private-key KEY', 'Specify path to private key') do |k|
+        @options[:private_key] = k
+      end
+
+      opts.on('-a', '--ca-certificate CACERT', 'Specify path to CA certificate') do |ca|
+        @options[:ca_certificate] = ca
+      end
+
       # Can not assume user wants override on.  Explicitly calling false unless otherwise indicated
       @options[:override] = false
       
@@ -104,6 +131,18 @@ class NodeClassify
         exit 1
       end
     end
+  end
+
+  def classifier_url
+    "#{@options[:console_protocol]}://#{@options[:console_host]}:#{@options[:console_port]}/classifier-api"
+  end
+
+  def auth_hash
+    {
+      'certificate_path'    => @options[:certificate],
+      'private_key_path'    => @options[:private_key],
+      'ca_certificate_path' => @options[:ca_certificate],
+    }
   end
 
   # Used in conjunction with get_group_id and get_group_id_by_name
@@ -445,8 +484,8 @@ end
 nc = NodeClassify.new
 
 if @puppetclassify.nil?
-  nc.start
   nc.get_options
+  nc.start(nc.classifier_url, nc.auth_hash)
   # puts nc.options.inspect
 end
 
@@ -520,5 +559,4 @@ if nc.options[:dp]
   else
     raise OptionParser.MissingArgument
   end
-end 
-  
+end
